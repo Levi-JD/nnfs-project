@@ -1,0 +1,105 @@
+import minescript
+#from java import JavaClass
+import math
+#import time
+REACH = 4.5
+FOV = 140
+SPEED = 0.3
+Minecraft = JavaClass("net.minecraft.client.Minecraft")
+ParticleTypes = JavaClass("net.minecraft.core.particles.ParticleTypes")
+mc = Minecraft.getInstance()
+#minescript.echo(minescript.player_orientation())
+for i in range(100):
+    #time.sleep(0.05)
+    cpitch_deg = minescript.player_orientation()[1]
+    cyaw_deg = minescript.player_orientation()[0]
+
+    pitch_rad = math.radians(cpitch_deg)
+    yaw_rad = math.radians(cyaw_deg)
+
+    # 2. Calculate Components
+
+    # Y Component (Up/Down)
+    # The negative sign here correctly maps Pitch -90 (Up) to Y=+1.
+    y = -math.sin(pitch_rad)
+
+    # Horizontal Scaling Factor 
+    cos_pitch = math.cos(pitch_rad)
+
+    # X Component (East/West)
+    # The negative sign here correctly maps Yaw 90 (West) to X=-1.
+    x = -cos_pitch * math.sin(yaw_rad)
+
+    # Z Component (North/South)
+    # This correctly maps Yaw 0 (South) to Z=+1.
+    z = cos_pitch * math.cos(yaw_rad)
+
+    direction_vector = (x, y, z)
+    #minescript.echo(f"Direction vector: x={x}, y={y}, z={z}")
+
+
+    players = minescript.players(sort="nearest")
+    # Get the current player position (floats)
+    pose = players[1].position
+    pose[1] += 1.62
+    posp = list(minescript.player().position)
+    posp[1] += 1.62 
+
+    dist = math.dist(posp, players[1].position) 
+    distance_vector = (players[1].position[0] - posp[0],
+                    players[1].position[1] - posp[1],
+                    players[1].position[2] - posp[2])
+
+    #minescript.echo("distance to nearest player:", dist, "distance vector", distance_vector)
+
+    if 0.5 < dist < REACH:
+        minescript.echo("close")
+        #normalize distance vector
+        distance_magnitude = math.sqrt(distance_vector[0]**2 + distance_vector[1]**2 + distance_vector[2]**2)
+        distance_normalized = (distance_vector[0]/distance_magnitude, 
+                            distance_vector[1]/distance_magnitude, 
+                            distance_vector[2]/distance_magnitude)
+        #dot product
+        dot_product = (direction_vector[0] * distance_normalized[0] + 
+                    direction_vector[1] * distance_normalized[1] + 
+                    direction_vector[2] * distance_normalized[2])
+        dot_product = max(-1.0, min(1.0, dot_product))
+        angle_between = math.degrees(math.acos(dot_product))
+        minescript.echo("angle to nearest player:", angle_between)
+            
+        if angle_between < FOV/2:
+            minescript.echo("within FOV, attacking")
+            x, y, z = distance_normalized[0], distance_normalized[1], distance_normalized[2]
+
+            # 1. Pitch Calculation (Vertical Angle)
+            # Pitch formula: pitch_rad = -asin(y)
+            # The negative sign is crucial because Minecraft's pitch is positive DOWNWARD (Y-axis points up).
+            y_clamped = max(-1.0, min(1.0, y))
+            pitch_rad = -math.asin(y_clamped)
+            
+            # 2. Yaw Calculation (Horizontal Angle)
+            # Yaw formula: yaw_rad = atan2(-x, z)
+            # The negative sign on 'x' and the order (z first, then x) is crucial for 
+            # Minecraft's coordinate system (Yaw is measured clockwise from +Z/South).
+            yaw_rad = math.atan2(-x, z)
+            
+            pitch_deg = math.degrees(pitch_rad)
+            yaw_deg = math.degrees(yaw_rad)
+            
+            # 3. Normalize Yaw to the required range (-180 to 180)
+            if yaw_deg > 180:
+                yaw_deg -= 360
+            elif yaw_deg < -180:
+                yaw_deg += 360#
+            
+            yaw_diff = yaw_deg - cyaw_deg
+            pitch_diff = pitch_deg - cpitch_deg
+            mc.level.addParticle(ParticleTypes.RAID_OMEN, pose[0], pose[1], pose[2], 0.0, 0.0, 0.0) 
+
+
+
+
+
+    #minescript.player_set_orientation(0, 0)
+
+

@@ -1,0 +1,140 @@
+MINECRAFT = JavaClass("net.minecraft.client.Minecraft")
+JAVAVECTOR3 = JavaClass("net.minecraft.world.phys.Vec3")
+MATH = JavaClass("java.lang.Math")
+
+# settings
+FOV = 70
+DISTANCE = 4
+STICKY_DISTANCE = 10
+MAX_STICKY_TICKS = 10
+MOUSE_THRESHOLD = 4
+
+#globals
+Minecraft = MINECRAFT.getInstance()
+Level = Minecraft.level
+Player = Minecraft.player
+
+MouseHandler = Minecraft.mouseHandler
+GameRenderer = Minecraft.gameRenderer
+Camera = GameRenderer.getMainCamera()
+
+Target = None
+
+
+def get_yaw_distance(current_yaw, target_yaw):
+    # 1. Get simple difference
+    diff = target_yaw - current_yaw
+    
+    # 2. wrap to -180 to +180 range
+    # This handles the "Back of the head" problem
+    return (diff + 180) % 360 - 180
+
+def get_pitch_distance(current_pitch, target_pitch):
+    # Pitch is simple subtraction because it is clamped (-90 to 90).
+    # It does not wrap around 360 like Yaw does.
+    return target_pitch - current_pitch
+
+def get_rotation_from_vec3(vec):
+    """
+    Converts a Minecraft Vec3 vector to Yaw and Pitch using Java Math.
+    Args:
+        vec: A Minecraft Vec3 object (has .x, .y, .z)
+    """
+    
+    # 1. Extract coordinates from the Vec3 object
+    x = vec.x
+    y = vec.y
+    z = vec.z
+    
+    # 2. Calculate horizontal distance (Hypotenuse of X and Z)
+    # We use Java's Math.sqrt
+    dist_xz = MATH.sqrt(x*x + z*z)
+    
+    # 3. Calculate Yaw
+    # Minecraft Yaw is offset by 90 degrees (South is 0)
+    # Math.toDegrees converts the radians from atan2 to degrees
+    yaw = MATH.toDegrees(MATH.atan2(z, x)) - 90
+    
+    # 4. Calculate Pitch
+    # Pitch is inverted (looking up is negative)
+    pitch = -MATH.toDegrees(MATH.atan2(y, dist_xz))
+    
+    return yaw, pitch
+
+
+def getTarget(tick):
+    global Target
+
+    global Minecraft
+    global Player
+    global Level
+
+    Minecraft = MINECRAFT.getInstance()
+    Level = Minecraft.level
+    Player = Minecraft.player
+
+    possibleTarget = None
+    possibleTargetYawDistance = 999
+    # get player data
+    playerPosition = Player.getEyePosition()
+    playerPitch = Camera.getXRot()
+    playerYaw = Camera.getYRot()
+    convertedPlayerYaw = playerYaw % 360
+
+    if convertedPlayerYaw > 180:
+        convertedPlayerYaw -= 360
+    elif convertedPlayerYaw < -180:
+        convertedPlayerYaw += 360
+
+    if Target == None:
+
+        for entity in Level.players():
+
+            # checks 
+            if entity == Player:
+                continue
+            if not entity.isAlive() or entity.isSpectator(): 
+                continue
+            if not Player.hasLineOfSight(entity):
+                continue
+
+            # get position and distance
+            entityPosition = JAVAVECTOR3(entity.getX(), entity.getY()+1.31, entity.getZ())
+
+            distanceToEntity = playerPosition.distanceTo(entityPosition)
+
+            if distanceToEntity <= DISTANCE:
+
+                targetVector = entityPosition.subtract(playerPosition).normalize()
+
+                # get target yaw and pitch and distance
+                targetYaw, targetPitch = get_rotation_from_vec3(targetVector)
+                targetYawDistance = abs(get_yaw_distance(convertedPlayerYaw, targetYaw))
+                targetPitchDistance = get_pitch_distance(playerPitch, targetPitch)
+
+                if targetYawDistance <= FOV:
+                    if possibleTarget == None:
+                        possibleTarget = entity
+                        possibleTargetYawDistance = abs(targetYawDistance)
+                    elif possibleTargetYawDistance > abs(targetYawDistance):
+                        possibleTarget = entity
+                        possibleTargetYawDistance = targetYawDistance
+            Target = possibleTarget
+        echo(Target)
+        
+    else:
+        
+        if Target.isRemoved():
+            Target = None
+        else:
+
+
+ 
+def AimAssist(render):
+    pass
+def TriggerAim(key):
+    pass
+
+add_event_listener("key", TriggerAim)
+add_event_listener("tick", getTarget)
+add_event_listener("render", AimAssist)

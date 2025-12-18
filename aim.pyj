@@ -1,0 +1,290 @@
+#java stuff
+
+MINECRAFT = JavaClass("net.minecraft.client.Minecraft")
+Minecraft = MINECRAFT.getInstance()
+JavaVector3 = JavaClass("net.minecraft.world.phys.Vec3")
+Math = JavaClass("java.lang.Math")
+WINDOW = Minecraft.getWindow()
+MouseHandler = Minecraft.mouseHandler
+level = Minecraft.level
+player = Minecraft.player
+game_renderer = Minecraft.gameRenderer
+camera = game_renderer.getMainCamera()
+
+# variables
+target = None
+targetLastTick = 0
+aim = 0
+lastmouse = [0, 0]
+mousemove = False
+
+# settings
+FOV = 70
+DISTANCE = 4
+STICKY_DISTANCE = 10
+MAX_STICKY_TICKS = 10
+MOUSE_THRESHOLD = 4
+
+def get_yaw_distance(current_yaw, target_yaw):
+    # 1. Get simple difference
+    diff = target_yaw - current_yaw
+    
+    # 2. wrap to -180 to +180 range
+    # This handles the "Back of the head" problem
+    return (diff + 180) % 360 - 180
+
+def get_pitch_distance(current_pitch, target_pitch):
+    # Pitch is simple subtraction because it is clamped (-90 to 90).
+    # It does not wrap around 360 like Yaw does.
+    return target_pitch - current_pitch
+
+def get_rotation_from_vec3(vec):
+    """
+    Converts a Minecraft Vec3 vector to Yaw and Pitch using Java Math.
+    Args:
+        vec: A Minecraft Vec3 object (has .x, .y, .z)
+    """
+    
+    # 1. Extract coordinates from the Vec3 object
+    x = vec.x
+    y = vec.y
+    z = vec.z
+    
+    # 2. Calculate horizontal distance (Hypotenuse of X and Z)
+    # We use Java's Math.sqrt
+    dist_xz = Math.sqrt(x*x + z*z)
+    
+    # 3. Calculate Yaw
+    # Minecraft Yaw is offset by 90 degrees (South is 0)
+    # Math.toDegrees converts the radians from atan2 to degrees
+    yaw = Math.toDegrees(Math.atan2(z, x)) - 90
+    
+    # 4. Calculate Pitch
+    # Pitch is inverted (looking up is negative)
+    pitch = -Math.toDegrees(Math.atan2(y, dist_xz))
+    
+    return yaw, pitch
+
+def getTarget(tick):
+    global Minecraft
+    Minecraft = MINECRAFT.getInstance()
+    global level 
+    global player 
+    level = Minecraft.level
+    player = Minecraft.player
+    global aim
+    if aim == 0:
+        #echo("Stopping")
+        return
+    global target
+    echo(target)
+    global targetLastTick
+    global DISTANCE
+    global STICKY_DISTANCE
+    ltarget = None
+    tarDis = 0
+    tarFD = 0
+    playerViewVector = player.getLookAngle()
+    playerPosition = player.getEyePosition()
+    playerPitch = camera.getXRot() #pitch
+    layerYaw = camera.getYRot()p #yaw
+    playerYaw = playerYaw % 360
+
+    if playerYaw > 180:
+        playerYaw -= 360
+    elif playerYaw < -180:
+        playerYaw += 360
+
+    if target == None:
+        for entity in level.players():
+            if entity == player:
+                continue
+            
+            if not entity.isAlive() or entity.isSpectator(): 
+                continue
+
+            position = JavaVector3(entity.getX(), entity.getY()+1.31, entity.getZ())
+            
+            distance = playerPosition.distanceTo(position)
+
+            if distance < DISTANCE:
+                direction = position.subtract(playerPosition).normalize()
+                yaw, pitch = get_rotation_from_vec3(direction)
+                yawDistance = abs(get_yaw_distance(playerYaw,yaw))
+
+                if yawDistance <= FOV:
+                    if player.hasLineOfSight(entity):
+                        if ltarget == None:
+                            ltarget = entity
+                            tarFD = yawDistance
+                        else:
+                            if yawDistance < tarFD:
+                                ltarget = entity
+        target = ltarget
+    
+    else:
+        if target.isRemoved():
+            target = None
+        else:
+            position = JavaVector3(target.getX(), target.getY()+1.31, target.getZ())
+                
+            distance = playerPosition.distanceTo(position)
+
+            if distance > STICKY_DISTANCE:
+                target = None
+            else:
+                direction = position.subtract(playerPosition).normalize()
+                yaw, pitch = get_rotation_from_vec3(direction)
+                yawDistance = abs(get_yaw_distance(playerYaw,yaw))
+                if yawDistance <= FOV:
+                    if player.hasLineOfSight(target):
+                        targetLastTick = 0
+                    else:
+                        targetLastTick += 1
+                else:
+                    targetLastTick += 1
+            if targetLastTick > MAX_STICKY_TICKS:
+                target = None
+
+        if target == None:
+            getTarget(None)
+    #echo(targetLastTick)         
+
+         
+
+def AimAssist(render):
+    global aim
+    global lastmouse
+    global mousemove
+    global target
+    global targetLastTick
+    global DISTANCE
+    global STICKY_DISTANCE
+    mouseChangeY = 0
+    mouseChangeX = 0
+    if aim == 0:
+        #echo("Stopping")
+        return
+    
+    """
+    currentTick = player.tickCount
+    if currentTick>lastTick:
+    
+        #getTarget()
+        mouseChangeX = MouseHandler.xpos() - lastmouse[0]
+        mouseChangeY = MouseHandler.ypos() - lastmouse[1]
+        lastmouse=[MouseHandler.xpos(), MouseHandler.ypos()]
+        if abs(mouseChangeX) + abs(mouseChangeY) <= 4:
+            mousemove = False
+        else:
+            mousemove = True
+            #echo("the mouse is in the house")
+    """
+    if mousemove:
+        if not target == None:
+            name = target.getName().getString()
+            #echo(name)
+
+            targetms = players(name=name)
+            if targetms:
+                targetms = targetms[0]
+                position = targetms.lerp_position
+                if position == None:
+                    position = JavaVector3(target.getX(), target.getY()+1.31, target.getZ())
+                else:
+                    position = JavaVector3(position[0], position[1]+1.31, position[2])
+                playerPosition = player.getEyePosition()
+                playerYaw = camera.getYRot() #yaw
+                playerYaw = playerYaw % 360
+
+                if playerYaw > 180:
+                    playerYaw -= 360
+                elif playerYaw < -180:
+                    playerYaw += 360
+                
+                distance = playerPosition.distanceTo(position)
+
+                #echo(distance)
+
+                if distance <= DISTANCE:
+                    direction = position.subtract(playerPosition).normalize()
+                    yaw, pitch = get_rotation_from_vec3(direction)
+                    yawDistance = get_yaw_distance(playerYaw,yaw)
+
+                    if abs(yawDistance) <= FOV:
+                        #echo(yawDistance)
+                        if abs(yawDistance) < 7:
+                            return
+                        if player.hasLineOfSight(target):
+                            fps = Minecraft.getFps()
+                            if yawDistance > 0:
+                                sign = 1
+                            else:
+                                sign = -1
+                            
+                            boost = min(1/abs(yawDistance)*210,70)
+                            speed = (70+boost) / fps
+                            #echo(boost)
+                            if abs(yawDistance) < speed:
+                                dyaw = yawDistance
+                            else:
+                                # Otherwise, move at constant speed
+                                if yawDistance > 0:
+                                    dyaw = speed
+                                else:
+                                    dyaw = -speed
+                            newYaw= playerYaw + dyaw
+                            newYaw = (newYaw + 180) % 360 - 180
+                            player.setYRot(newYaw)
+
+    #mouse move!!!?!?!!!
+    #echo(mouseChangeX, mouseChangeY)
+
+    """
+    playerViewVector = player.getLookAngle()
+    playerPosition = player.getEyePosition()
+    playerPitch = camera.getXRot() #pitch
+    playerYaw = camera.getYRot() #yaw
+    playerYaw = playerYaw % 360
+    if playerYaw > 180:
+        playerYaw -= 360
+    elif playerYaw < -180:
+        playerYaw += 360
+
+    #echo("Player Yaw: ", playerYaw, "Pitch: ", playerPitch)
+    
+    #echo(playerViewVector)
+    for entity in level.players():
+        if entity == player:
+            continue
+
+        position = JavaVector3(entity.getX(), entity.getY()+1.31, entity.getZ())
+        
+        distance = playerPosition.distanceTo(position)
+        #echo("Player:", entity.getName().getString(), "Distance:", distance)
+
+        if distance < 5:
+            direction = position.subtract(playerPosition).normalize()
+            #player.setXRot(0)
+            #player.setYRot(-81)
+            #echo(direction)
+            yaw, pitch = get_rotation_from_vec3(direction)
+            #echo("Direction Yaw: ", yaw, "Pitch: ", pitch)
+    """
+
+def TriggerAim(key):
+    global aim
+    global lastTick 
+    if key.key == 88:
+        if key.action == 0:
+            if aim == 0:
+                lastTick = player.tickCount
+                aim = 1
+                echo("starting", aim)
+            else:
+                aim = 0
+                echo("setting aim 0")
+
+add_event_listener("key", TriggerAim)
+add_event_listener("tick", getTarget)
+add_event_listener("render", AimAssist)
