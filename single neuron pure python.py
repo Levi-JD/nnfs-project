@@ -1,4 +1,15 @@
 import numpy as np
+import nnfs
+import matplotlib.pyplot as plt
+from nnfs.datasets import spiral_data
+
+#nnfs.init()
+random_seed=0
+np.random.seed(random_seed)
+X,y = spiral_data(samples=100, classes=3)
+
+plt.scatter(X[:,0], X[:,1], c=y, cmap="brg")
+plt.show()
 
 inputs = [[1, 2, 3, 2.5],
           [2, 5, -1, 2],
