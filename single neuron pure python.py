@@ -140,6 +140,10 @@ print(activation2.output[:5])
 # it takes the output of second dense layer here and returns loss
 loss = loss_function.calculate(activation2.output, y)
 
-print(y)
+predictions = np.argmax(activation2.output, axis=1)
+if len(y.shape) == 2:
+    y = np.argmax(y, axis=1)
+accuracy = np.mean(predictions==y)
 # Print loss value
 print('loss:', loss)
+print('acc', accuracy)
